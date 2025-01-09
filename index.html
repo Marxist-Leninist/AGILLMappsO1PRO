@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>AGILLMappsO1PRO Index</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 40px;
+    }
+    h1 {
+      margin-bottom: 10px;
+    }
+    #search-input {
+      width: 100%;
+      max-width: 500px;
+      padding: 8px;
+      margin-bottom: 20px;
+      font-size: 16px;
+    }
+    #files-list {
+      list-style-type: none;
+      padding: 0;
+    }
+    #files-list li {
+      margin: 5px 0;
+    }
+    #files-list a {
+      text-decoration: none;
+      color: blue;
+    }
+    #files-list a:hover {
+      text-decoration: underline;
+    }
+    .loading {
+      font-style: italic;
+      color: gray;
+    }
+  </style>
+</head>
+<body>
+  <h1>Index of HTML Files in AGILLMappsO1PRO</h1>
+
+  <!-- Search field -->
+  <input 
+    type="text" 
+    id="search-input" 
+    placeholder="Search by file name or content..." 
+    oninput="searchFiles()" 
+  />
+
+  <!-- A message area for loading status or errors -->
+  <div id="status" class="loading">Loading file list from GitHub...</div>
+
+  <!-- Where the list of files will appear -->
+  <ul id="files-list"></ul>
+
+  <script>
+    // --- Configuration: Adjust if you move this HTML file to another repo or branch ---
+    const owner = 'Marxist-Leninist';
+    const repo = 'AGILLMappsO1PRO';
+    const branch = 'main';  // or your default branch name
+
+    // We'll store data about each HTML file (name + full text).
+    let cachedFileContents = [];
+
+    /**
+     * Fetches the list of files from the GitHub repository’s top-level directory,
+     * filters for .html files, then fetches and caches their content.
+     */
+    async function initializeFileList() {
+      try {
+        const statusElem = document.getElementById('status');
+        statusElem.textContent = 'Fetching list of HTML files...';
+
+        // 1) Fetch top-level contents from GitHub
+        const contentsURL = `https://api.github.com/repos/${owner}/${repo}/contents`;
+        const topResponse = await fetch(contentsURL);
+        const topData = await topResponse.json();
+
+        // 2) Filter for .html files only
+        const htmlFiles = (Array.isArray(topData) ? topData : []).filter(
+          item => item.type === 'file' && item.name.toLowerCase().endsWith('.html')
+        );
+
+        if (htmlFiles.length === 0) {
+          statusElem.textContent = 'No HTML files found in this repository.';
+          return;
+        }
+
+        statusElem.textContent = 'Fetching and caching each file’s content...';
+
+        // 3) Fetch the raw content for each HTML file
+        //    so our search can be done by filename or text content
+        const loadPromises = htmlFiles.map(async (file) => {
+          const rawURL = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${file.name}`;
+          const response = await fetch(rawURL);
+          const text = await response.text();
+          return {
+            name: file.name,
+            content: text
+          };
+        });
+        cachedFileContents = await Promise.all(loadPromises);
+
+        // 4) Display everything by default (no search term yet)
+        displayFiles(cachedFileContents);
+        statusElem.textContent = ''; // clear status
+      } catch (error) {
+        document.getElementById('status').textContent =
+          'Error fetching files from GitHub: ' + error;
+      }
+    }
+
+    /**
+     * Handles search requests: filters the cachedFileContents by either
+     * file name or text content containing the user’s input.
+     */
+    function searchFiles() {
+      const searchTerm = document.getElementById('search-input').value.toLowerCase();
+      const filtered = cachedFileContents.filter(fc => {
+        const nameMatch = fc.name.toLowerCase().includes(searchTerm);
+        const contentMatch = fc.content.toLowerCase().includes(searchTerm);
+        return nameMatch || contentMatch;
+      });
+      displayFiles(filtered);
+    }
+
+    /**
+     * Renders a list of file entries (with link) into the #files-list <ul>.
+     */
+    function displayFiles(fileEntries) {
+      const filesList = document.getElementById('files-list');
+      filesList.innerHTML = '';
+
+      fileEntries.forEach(entry => {
+        const li = document.createElement('li');
+        const link = document.createElement('a');
+
+        // Link to the RAW version of the file on GitHub
+        link.href = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${entry.name}`;
+        link.target = '_blank';  // open in new tab
+        link.textContent = entry.name;
+
+        li.appendChild(link);
+        filesList.appendChild(li);
+      });
+    }
+
+    // --- On page load, we fetch the file list & contents once ---
+    window.onload = initializeFileList;
+  </script>
+</body>
+</html>
