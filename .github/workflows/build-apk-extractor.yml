@@ -2,7 +2,7 @@ name: Build APK Extractor
 
 on:
   push:
-    branches: [apk-extractor]
+    branches: [main]
     paths:
       - 'apk-extractor/**'
       - '.github/workflows/build-apk-extractor.yml'
@@ -12,12 +12,17 @@ on:
       - '.github/workflows/build-apk-extractor.yml'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Java 17
         uses: actions/setup-java@v4
@@ -39,9 +44,24 @@ jobs:
       - name: Build debug APK
         run: gradle -p apk-extractor --no-daemon assembleDebug
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: APK-Extractor
           path: apk-extractor/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+      - name: Save compiled APK into repository
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          mkdir -p apk-extractor/releases
+          cp apk-extractor/app/build/outputs/apk/debug/app-debug.apk apk-extractor/releases/APK-Extractor-v1.0.0.apk
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apk-extractor/releases/APK-Extractor-v1.0.0.apk
+          if git diff --cached --quiet; then
+            echo 'APK already current.'
+            exit 0
+          fi
+          git commit -m 'Add APK Extractor v1.0.0 binary [skip ci]'
+          git push
